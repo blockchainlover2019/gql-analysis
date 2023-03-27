@@ -7,6 +7,18 @@ impl Query {
     async fn hello(&self) -> &str {
         "Hello, world!"
     }
+
+    #[graphql(complexity = 5)]
+    async fn value(&self) -> i32 {
+        5
+        // todo!()
+    }
+
+    #[graphql(complexity = "count * child_complexity")]
+    async fn values(&self, count: usize) -> i32 {
+        20
+        // todo!()
+    }
 }
 
 pub struct Mutation;

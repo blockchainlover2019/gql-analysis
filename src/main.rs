@@ -12,7 +12,7 @@ use axum::{
     routing::get,
     RequestPartsExt, Router, TypedHeader,
 };
-use governor::{Quota, RateLimiter};
+use governor::{clock::FakeRelativeClock, Quota, RateLimiter};
 use nonzero::nonzero;
 use std::sync::Arc;
 
@@ -53,6 +53,7 @@ where
 }
 
 fn token_is_valid(_token: &str) -> bool {
+    println!("token {}", _token);
     true
 }
 
@@ -63,17 +64,26 @@ async fn rate_limiter_middleware<B>(
 where
     B: Send,
 {
-    let rate_limiter = RateLimiter::keyed(Quota::per_minute(nonzero!(5u32)));
+    let clock = FakeRelativeClock::default();
+    let rate_limiter = RateLimiter::direct_with_clock(Quota::per_second(nonzero!(5u32)), &clock);
 
     // Check if the request is within the rate limit
-    match rate_limiter.check_key(&()) {
+    match rate_limiter
+        .check()
+        .map_err(|outcome| outcome.quota().burst_size().get())
+    {
         Ok(_) => Ok(next.run(request).await),
         Err(_) => Err(StatusCode::UNAUTHORIZED),
     }
 }
 
 fn get_router() -> Router {
-    let schema = Arc::new(Schema::build(Query, Mutation, EmptySubscription).finish());
+    let schema = Arc::new(
+        Schema::build(Query, Mutation, EmptySubscription)
+            .limit_depth(5)
+            .limit_complexity(50)
+            .finish(),
+    );
     Router::new()
         .route("/", get(graphiql).post(graphql_handler))
         .layer(Extension(schema))
