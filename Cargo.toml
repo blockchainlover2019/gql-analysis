@@ -1,21 +1,43 @@
+[patch.crates-io]
+#axum = { git = "https://github.com/rjzak/axum", branch = "wasi_wip" }
+#axum-core = { git = "https://github.com/rjzak/axum", branch = "wasi_wip" }
+#axum-extra = { git = "https://github.com/rjzak/axum", branch = "wasi_wip" }
+#axum-macros = { git = "https://github.com/rjzak/axum", branch = "wasi_wip" }
+
+hyper = { git = "https://github.com/rjzak/hyper", branch = "wasi_wip" }
+
 [package]
 name = "gql-analysis"
 version = "0.1.0"
 edition = "2021"
+authors = ["blockchainlover2019 <blockchainlover2019@gmail.com>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+
 [dependencies]
+# add
 async-graphql = "5.0.6"
-async-graphql-axum = "5.0.6"
-axum = { version = "0.6.0", features = ["headers"] }
-hyper = "0.14"
+async-graphql-axum-wasi = "4.0.4"
+
+anyhow = "^1.0.55"
+# axum = { git = "https://github.com/rjzak/axum", branch = "wasi_wip", features = ["headers"] }
+axum = { version = "0.5.15", features = ["headers"] }
+tracing-subscriber = { version="^0.3.8", features = ["env-filter"] }
+tracing = "^0.1.29"
+chrono = "0.4"
+
+
+
 serde = "1.0"
 serde_json = "1.0"
-tokio = { version = "1.0", features = ["full"] }
-tower = "0.4"
-tower-http = { version = "0.4.0", features = ["map-request-body", "util"] }
-http-body = "0.4.5"
 governor = "0.5.1"
 nonzero = "0.1.0"
-wasm-bindgen = "0.2.84"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# tokio = { git = "https://github.com/tokio-rs/tokio", branch = "master", features = ["macros", "rt"] }
+tokio = { version = "1.20.0", features = ["macros", "rt", "net"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# tokio = { git = "https://github.com/tokio-rs/tokio", branch = "master", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }

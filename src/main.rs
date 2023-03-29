@@ -1,24 +1,24 @@
 use async_graphql::{http::GraphiQLSource, EmptyMutation, EmptySubscription, Schema};
-use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-
+use async_graphql_axum_wasi::{GraphQLRequest, GraphQLResponse};
 use crate::schema::{AppSchema, Mutation, Query};
 use axum::{
-    extract::Extension,
+    extract::{Extension, RequestParts, TypedHeader},
     headers::authorization::Bearer,
     headers::Authorization,
     http::{Request, StatusCode},
     middleware::{self, Next},
     response::{self, IntoResponse, Response},
     routing::get,
-    RequestPartsExt, Router, TypedHeader,
+    Router,
+    handler::Handler,
 };
 use governor::{clock::FakeRelativeClock, Quota, RateLimiter};
 use nonzero::nonzero;
 use std::sync::Arc;
-
-use wasm_bindgen::prelude::*;
+use std::env;
 
 mod schema;
+
 async fn graphql_handler(
     schema: Extension<Arc<AppSchema>>,
     req: GraphQLRequest,
@@ -31,28 +31,39 @@ async fn graphiql() -> impl IntoResponse {
     response::Html(GraphiQLSource::build().endpoint("/").finish())
 }
 
-async fn auth_middleware<B>(request: Request<B>, next: Next<B>) -> Result<Response, StatusCode>
+
+async fn auth_middleware<B>(
+  request: Request<B>,
+  next: Next<B>,
+) -> Result<Response, StatusCode>
 where
-    B: Send,
+  B: Send,
 {
-    // running extractors requires a `axum::http::request::Parts`
-    let (mut parts, body) = request.into_parts();
+  // running extractors requires a `RequestParts`
+  let mut request_parts = RequestParts::new(request);
 
-    // `TypedHeader<Authorization<Bearer>>` extracts the auth token
-    let auth: TypedHeader<Authorization<Bearer>> = parts
-        .extract()
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+  // `TypedHeader<Authorization<Bearer>>` extracts the auth token but
+  // `RequestParts::extract` works with anything that implements `FromRequest`
+  let auth = request_parts.extract::<TypedHeader<Authorization<Bearer>>>()
+      .await
+      .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
-    if !token_is_valid(auth.token()) {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
+  if !token_is_valid(auth.token()) {
+      return Err(StatusCode::UNAUTHORIZED);
+  }
 
-    // reconstruct the request
-    let request = Request::from_parts(parts, body);
+  // get the request back so we can run `next`
+  //
+  // `try_into_request` will fail if you have extracted the request body. We
+  // know that `TypedHeader` never does that.
+  //
+  // see the `consume-body-in-extractor-or-middleware` example if you need to
+  // extract the body
+  let request = request_parts.try_into_request().expect("body extracted");
 
-    Ok(next.run(request).await)
+  Ok(next.run(request).await)
 }
+
 
 fn token_is_valid(_token: &str) -> bool {
     println!("token {}", _token);
@@ -93,16 +104,38 @@ fn get_router() -> Router {
         .layer(middleware::from_fn(rate_limiter_middleware))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
-async fn main() {
+pub async fn main() -> anyhow::Result<()> {
     let app = get_router();
-
     let addr = "127.0.0.1:8000".parse().unwrap();
     let server = axum::Server::bind(&addr).serve(app.into_make_service());
-
     println!("Server listening on {}", addr);
-
     server.await.unwrap();
+    Ok(())
+}
+
+#[cfg(target_arch = "wasm32")]
+#[tokio::main(flavor = "current_thread")]
+pub async fn main() -> anyhow::Result<()> {
+  use std::os::wasi::io::FromRawFd;
+
+  tracing_subscriber::fmt::init();
+  let std_listener = unsafe { std::net::TcpListener::from_raw_fd(3) };
+  std_listener.set_nonblocking(true).unwrap();
+  axum::Server::from_tcp(std_listener)
+      .unwrap()
+      .serve(get_router().into_make_service()).await
+      .unwrap();
+  Ok(())
+}
+
+fn platform() -> String {
+  let mut name = env::consts::ARCH.to_string();
+  if env::consts::OS.len() > 0 {
+      name = format!("{}-{}", name, env::consts::OS);
+  }
+  name
 }
 
 #[cfg(test)]
@@ -118,7 +151,6 @@ pub mod tests {
     use http_body::combinators::UnsyncBoxBody;
     use serde::{de::DeserializeOwned, Serialize};
     use serde_json::json;
-    use tower::ServiceExt;
 
     pub async fn send_request(
         router: &Router,
