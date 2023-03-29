@@ -16,6 +16,8 @@ use governor::{clock::FakeRelativeClock, Quota, RateLimiter};
 use nonzero::nonzero;
 use std::sync::Arc;
 
+use wasm_bindgen::prelude::*;
+
 mod schema;
 async fn graphql_handler(
     schema: Extension<Arc<AppSchema>>,
