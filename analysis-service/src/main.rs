@@ -3,19 +3,23 @@ use async_graphql_axum_wasi::{GraphQLRequest, GraphQLResponse};
 use crate::schema::{AppSchema, Mutation, Query};
 use axum::{
     extract::{Extension, RequestParts, TypedHeader},
-    headers::authorization::Bearer,
-    headers::Authorization,
-    http::{Request, StatusCode},
+    headers::{ authorization::Bearer, Authorization, CONTENT_TYPE },
+    http::{Request, StatusCode, Method},
     middleware::{self, Next},
     response::{self, IntoResponse, Response},
     routing::get,
     Router,
     handler::Handler,
+    body::Bytes,
 };
 use governor::{clock::FakeRelativeClock, Quota, RateLimiter};
 use nonzero::nonzero;
 use std::sync::Arc;
 use std::env;
+use http_body::combinators::UnsyncBoxBody;
+use serde::{de::DeserializeOwned, Serialize};
+use serde_json::json;
+use hyper::*;
 
 mod schema;
 
@@ -142,76 +146,66 @@ fn platform() -> String {
   name
 }
 
+pub async fn send_request(
+  router: &Router,
+  request: Request<hyper::Body>,
+) -> hyper::Response<UnsyncBoxBody<Bytes, axum::Error>> {
+  router
+      .clone()
+      .oneshot(request)
+      .await
+      .expect("failed to send oneshot request")
+}
+
+pub async fn get_request(
+  router: &Router,
+  uri: impl AsRef<str>,
+) -> hyper::Response<UnsyncBoxBody<Bytes, axum::Error>> {
+  let request = Request::builder()
+      .method(Method::GET)
+      .uri(uri.as_ref())
+      .body(hyper::Body::empty())
+      .expect("failed to build GET request");
+  send_request(router, request).await
+}
+
+pub async fn post_request<T: Serialize>(
+  router: &Router,
+  uri: impl AsRef<str>,
+  body: &T,
+) -> hyper::Response<UnsyncBoxBody<Bytes, axum::Error>> {
+  let request = Request::builder()
+      .method(Method::POST)
+      .uri(uri.as_ref())
+      .header(CONTENT_TYPE, "application/json")
+      .header(AUTHORIZATION, "Bearer test_token")
+      .body(
+          serde_json::to_vec(body)
+              .expect("failed to serialize POST body")
+              .into(),
+      )
+      .expect("failed to build POST request");
+  send_request(router, request).await
+}
+
+pub async fn deserialize_response_body<T>(
+  response: hyper::Response<UnsyncBoxBody<Bytes, axum::Error>>,
+) -> T
+where
+  T: DeserializeOwned,
+{
+  let bytes = hyper::body::to_bytes(response.into_body())
+      .await
+      .expect("failed to read response body into bytes");
+  serde_json::from_slice::<T>(&bytes).expect("failed to deserialize response")
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use axum::{
-        body::Bytes,
-        http::{
-            header::{AUTHORIZATION, CONTENT_TYPE},
-            Method, Request,
-        },
-    };
-    use http_body::combinators::UnsyncBoxBody;
-    use serde::{de::DeserializeOwned, Serialize};
-    use serde_json::json;
 
-    pub async fn send_request(
-        router: &Router,
-        request: Request<hyper::Body>,
-    ) -> hyper::Response<UnsyncBoxBody<Bytes, axum::Error>> {
-        router
-            .clone()
-            .oneshot(request)
-            .await
-            .expect("failed to send oneshot request")
-    }
-
-    pub async fn get(
-        router: &Router,
-        uri: impl AsRef<str>,
-    ) -> hyper::Response<UnsyncBoxBody<Bytes, axum::Error>> {
-        let request = Request::builder()
-            .method(Method::GET)
-            .uri(uri.as_ref())
-            .body(hyper::Body::empty())
-            .expect("failed to build GET request");
-        send_request(router, request).await
-    }
-
-    pub async fn post<T: Serialize>(
-        router: &Router,
-        uri: impl AsRef<str>,
-        body: &T,
-    ) -> hyper::Response<UnsyncBoxBody<Bytes, axum::Error>> {
-        let request = Request::builder()
-            .method(Method::POST)
-            .uri(uri.as_ref())
-            .header(CONTENT_TYPE, "application/json")
-            .header(AUTHORIZATION, "Bearer test_token")
-            .body(
-                serde_json::to_vec(body)
-                    .expect("failed to serialize POST body")
-                    .into(),
-            )
-            .expect("failed to build POST request");
-        send_request(router, request).await
-    }
-
-    pub async fn deserialize_response_body<T>(
-        response: hyper::Response<UnsyncBoxBody<Bytes, axum::Error>>,
-    ) -> T
-    where
-        T: DeserializeOwned,
-    {
-        let bytes = hyper::body::to_bytes(response.into_body())
-            .await
-            .expect("failed to read response body into bytes");
-        serde_json::from_slice::<T>(&bytes).expect("failed to deserialize response")
-    }
 
     #[tokio::test]
-
     async fn try_post() {
         const uri: &'static str = "https://localhost:8000";
         let request_body = /*json!({
