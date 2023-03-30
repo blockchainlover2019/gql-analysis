@@ -108,7 +108,7 @@ fn get_router() -> Router {
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {
     let app = get_router();
-    let addr = "127.0.0.1:8000".parse().unwrap();
+    let addr = "127.0.0.1:3000".parse().unwrap();
     let server = axum::Server::bind(&addr).serve(app.into_make_service());
     println!("Server listening on {}", addr);
     server.await.unwrap();
@@ -119,14 +119,18 @@ pub async fn main() -> anyhow::Result<()> {
 #[tokio::main(flavor = "current_thread")]
 pub async fn main() -> anyhow::Result<()> {
   use std::os::wasi::io::FromRawFd;
-
+  
   tracing_subscriber::fmt::init();
+
   let std_listener = unsafe { std::net::TcpListener::from_raw_fd(3) };
-  std_listener.set_nonblocking(true).unwrap();
+  std_listener.set_nonblocking(true).expect("Cannot set non-blocking");
+
   axum::Server::from_tcp(std_listener)
       .unwrap()
       .serve(get_router().into_make_service()).await
       .unwrap();
+
+  println!("server is running");
   Ok(())
 }
 
