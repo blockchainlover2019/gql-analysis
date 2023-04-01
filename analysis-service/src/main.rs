@@ -37,7 +37,7 @@ pub async fn post_to_gql_service(
 
   let req = hyper::Request::builder()
       .method(Method::POST)
-      .uri("http://135.181.131.190:27017")
+      .uri("http://0.0.0.0:27017")
       .header(hyper::header::CONTENT_TYPE, "application/json")
       .header(hyper::header::AUTHORIZATION, "Bearer test_token")
       .body(body)

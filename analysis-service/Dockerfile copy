@@ -2,8 +2,8 @@ FROM debian:buster-slim AS ubuntu
 # Install the necessary dependencies
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates libssl-dev curl git python\
+  && curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash \
   && rm -rf /var/lib/apt/lists/*
-RUN curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash
 
 # Set the working directory
 WORKDIR /usr/src/app

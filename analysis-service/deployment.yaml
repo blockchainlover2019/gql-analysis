@@ -13,8 +13,8 @@ spec:
         app: gql-analysis
     spec:
       containers:
-        - name: GQL_ANALYSIS_SIDECAR
-          image: elcrazy/gql-analysis:15.0
+        - name: gql-analysis-sidecar
+          image: gql-analysis:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3000

@@ -1,9 +1,4 @@
-FROM debian:buster-slim AS ubuntu
-# Install the necessary dependencies
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates libssl-dev curl git python\
-  && rm -rf /var/lib/apt/lists/*
-RUN curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash
+FROM wasmedge/slim:0.11.2
 
 # Set the working directory
 WORKDIR /usr/src/app
@@ -16,5 +11,3 @@ EXPOSE 3000
 
 # Start the application
 CMD ["wasmedge", "gql-analysis.wasm"]
-
-# docker run --rm -it -d -p 3000:8080 elcrazy/gql-analysis:10.0
