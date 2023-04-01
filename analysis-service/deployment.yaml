@@ -17,5 +17,5 @@ spec:
           image: elcrazy/gql-analysis:15.0
           imagePullPolicy: Always
           ports:
-            - containerPort: 8080
+            - containerPort: 3000
               hostPort: 3000

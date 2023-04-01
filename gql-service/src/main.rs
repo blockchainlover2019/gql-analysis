@@ -1,3 +1,5 @@
+#![allow(unused_imports, unused_variables, dead_code)]
+
 use async_graphql::{http::GraphiQLSource, EmptyMutation, EmptySubscription, Schema};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use crate::schema::{AppSchema, Mutation, Query};
@@ -18,6 +20,7 @@ use std::sync::Arc;
 use std::env;
 
 mod schema;
+mod bookstore;
 
 async fn graphql_handler(
     schema: Extension<Arc<AppSchema>>,
@@ -43,7 +46,7 @@ fn get_router() -> Router {
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {
     let app = get_router();
-    let addr = "127.0.0.1:3000".parse().unwrap();
+    let addr = "0.0.0.0:27017".parse().unwrap();
     let server = axum::Server::bind(&addr).serve(app.into_make_service());
     println!("Server listening on {}", addr);
     server.await.unwrap();
