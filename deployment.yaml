@@ -13,9 +13,12 @@ spec:
         app: gql-analysis
     spec:
       containers:
-        - name: gql-analysis-sidecar
-          image: gql-analysis:latest
-          imagePullPolicy: Always
+        - name: gql-server-main
+          image: gql-service:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
               hostPort: 3000
+        - name: gql-analysis-sidecar
+          image: gql-analysis:latest
+          imagePullPolicy: IfNotPresent

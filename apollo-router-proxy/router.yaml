@@ -1,0 +1,9 @@
+supergraph:
+  # The socket address and port to listen on
+  listen: 127.0.0.1:3001
+plugins:
+  # this plugin takes a path
+  # and will read from it everytime a request comes in
+  # to check if a client can run a query
+  alyti.sidecar:
+    addr: "http://localhost:3002"

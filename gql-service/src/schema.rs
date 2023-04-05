@@ -11,6 +11,19 @@ pub struct Book {
     pub author: String,
 }
 
+#[derive(Default)]
+struct PubInfo;
+
+#[derive(Default)]
+struct Publisher;
+
+#[derive(Default)]
+struct Location;
+
+#[derive(Default)]
+struct Address;
+
+
 #[Object]
 impl Book {
     async fn id(&self) -> &str {
@@ -23,6 +36,41 @@ impl Book {
 
     async fn author(&self) -> &str {
         &self.author
+    }
+
+    async fn desc(&self) -> PubInfo {
+        PubInfo::default()
+    }
+}
+
+#[Object]
+impl PubInfo {
+    async fn publisher(&self) -> Publisher {
+        Publisher::default()
+    }
+}
+
+#[Object]
+impl Publisher {
+    async fn location(&self) -> Location {
+        Location::default()
+    }
+}
+
+#[Object]
+impl Location {
+    async fn flat_address(&self) -> &str {
+        "hello, depth is 5 here"
+    }
+    async fn address(&self) -> Address {
+        Address::default()
+    }
+}
+
+#[Object]
+impl Address {
+    async fn hello(&self) -> &str {
+        "hello"
     }
 }
 
@@ -40,9 +88,8 @@ impl Query {
         author: "author".to_string()
       })
     }
-
     async fn books(&self, ctx: &Context<'_>) -> Vec<Book> {
-      BookStore::get_books()
+        BookStore::get_books()
     }
 
     #[graphql(complexity = 5)]
