@@ -15,6 +15,9 @@ use tower::limit::{RateLimitLayer};
 use graphql_depth_limit::QueryDepthAnalyzer;
 use graphql_parser::parse_query;
 
+mod config;
+use config::Config;
+
 fn rate_limiter_check() -> bool {
   true
 }
@@ -46,14 +49,26 @@ pub async fn post_to_gql_service(
 #[derive(Debug, serde::Deserialize)]
 struct GQuery { query: String }
 
-async fn check_depth_limit(
-  bytes: &[u8]
-) -> bool {
-  //let query_value = serde_json::from_slice::<GQuery>(&bytes).unwrap();
+#[cfg(feature = "standalone")]
+pub fn get_query_from_bytes(bytes: &[u8]) -> String {
+  let query_value = serde_json::from_slice::<GQuery>(&bytes).unwrap();
+  query_value.query.to_string()
+}
+
+#[cfg(not(feature = "standalone"))]
+pub fn get_query_from_bytes(bytes: &[u8]) -> String {
   let query = std::str::from_utf8(&bytes).unwrap();
+  query.to_string()
+}
+
+async fn check_depth_limit(
+  bytes: &[u8],
+  max_depth: u32
+) -> bool {
+  let query = get_query_from_bytes(bytes);
   println!("query: {:?}", query);
-  let depth = QueryDepthAnalyzer::new(query, vec![], |_a, _b| true).unwrap();
-  match depth.verify(5) {
+  let depth = QueryDepthAnalyzer::new(&query, vec![], |_a, _b| true).unwrap();
+  match depth.verify(max_depth as usize) {
     Ok(depth) => { println!("depth: {:?}", depth);  true},
     Err(_) => false
   }
@@ -61,6 +76,7 @@ async fn check_depth_limit(
 
 async fn request_handler(
   req: hyper::Request<hyper::Body>,
+  config: Config
 ) -> Result<hyper::Response<hyper::Body>, hyper::Error> {
   use hyper::{Body, Method, Request, Response};
 
@@ -78,7 +94,7 @@ async fn request_handler(
               let body = req.into_body();
               let bytes = hyper::body::to_bytes(body).await.unwrap();
               println!("bytes {:?}", bytes);
-              if !check_depth_limit(&bytes).await {
+              if !check_depth_limit(&bytes, config.max_depth).await {
                 println!("depth limit");
                 Ok(Response::builder().status(400).body("Depth Limit Error".into()).unwrap())
               } else {
@@ -99,9 +115,13 @@ async fn request_handler(
   }
 }
 
+
+
 #[tokio::main(flavor = "current_thread")]
 pub async fn main() -> anyhow::Result<()> {
   use std::convert::Infallible;
+  
+  let sec_config = Config::read_config();
 
   let addr = SocketAddr::from(([127, 0, 0, 1], 3005));
 
@@ -110,9 +130,12 @@ pub async fn main() -> anyhow::Result<()> {
 
   loop {
     let (stream, _) = listener.accept().await?;
-
+    let service_handler = service_fn(move |req| async move {
+      request_handler(req, sec_config).await
+    });
+    
     tokio::task::spawn(async move {
-        if let Err(err) = Http::new().serve_connection(stream, service_fn(request_handler)).await {
+        if let Err(err) = Http::new().serve_connection(stream, service_handler).await {
           println!("Error serving connection: {:?}", err);
         } 
     });

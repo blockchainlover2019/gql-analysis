@@ -98,8 +98,8 @@ impl Plugin for SidecarProxy {
                                             .data(Value::default())
                                             .error(
                                                 graphql::Error::builder()
-                                                    .message("Request is not allowed")
-                                                    .extension_code("UNAUTHORIZED_REQUEST")
+                                                    .message(response.text().await.unwrap())
+                                                    .extension_code("BAD_REQUEST")
                                                     .build(),
                                             )
                                             .status_code(other_code)

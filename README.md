@@ -28,8 +28,10 @@ docker run --rm -it -p 3004:3004 router-proxy:latest
 ```
 
 ```sh
+kind create cluster
 kind load docker-image gql-analyzer:latest
 kind load docker-image router-proxy:latest
+kind load docker-image gql-service:latest
 ```
 
 ```sh
