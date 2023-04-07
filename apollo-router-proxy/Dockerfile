@@ -22,4 +22,6 @@ COPY --from=builder /usr/local/cargo/bin/apollo-router-plugin /bin/
 COPY router.yaml /bin/
 COPY supergraph-schema.graphql /bin/
 CMD ["apollo-router-plugin", "-s", "/bin/supergraph-schema.graphql", "--config", "/bin/router.yaml"]
-EXPOSE 4000 8088
+EXPOSE 3004 8088
+
+# apollo-router-plugin -s /bin/supergraph-schema.graphql --config /bin/router.yaml

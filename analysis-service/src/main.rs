@@ -22,7 +22,7 @@ fn rate_limiter_check() -> bool {
 fn token_is_valid(_token: &str) -> bool {
   _token == "Bearer test_token"
 }
-
+/*
 pub async fn post_to_gql_service(
   body: hyper::Body,
 ) -> hyper::Response<hyper::Body> {
@@ -41,7 +41,8 @@ pub async fn post_to_gql_service(
   println!("res: {:?}", res);
   //Response::builder().body("some string".into()).unwrap()
   res
-}
+}*/
+
 #[derive(Debug, serde::Deserialize)]
 struct GQuery { query: String }
 
@@ -102,7 +103,7 @@ async fn request_handler(
 pub async fn main() -> anyhow::Result<()> {
   use std::convert::Infallible;
 
-  let addr = SocketAddr::from(([0, 0, 0, 0], 3002));
+  let addr = SocketAddr::from(([127, 0, 0, 1], 3005));
 
   let listener = TcpListener::bind(addr).await?;
   println!("Listening on http://{}", addr);

@@ -38,7 +38,7 @@ type Book
 scalar join__FieldSet
 
 enum join__Graph {
-  LOCATIONS @join__graph(name: "locations", url: "http://localhost:27017")
+  LOCATIONS @join__graph(name: "locations", url: "http://gql-service:27017")
 }
 
 scalar link__Import

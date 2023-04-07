@@ -22,3 +22,4 @@ tower = { version = "0.4.13", features = ["log", "full"] }
 governor = "0.5.1"
 graphql-parser = "0.4.0"
 graphql_depth_limit = "0.1.1"
+target = "2.0.0"

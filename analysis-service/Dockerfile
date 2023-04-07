@@ -7,7 +7,7 @@ WORKDIR /usr/src/app
 COPY /target/wasm32-wasi/debug/gql-analysis.wasm /usr/src/app/gql-analysis.wasm
 
 # Expose the port your application uses (change it to the port you're using)
-EXPOSE 3000
+EXPOSE 3005
 
 # Start the application
 CMD ["wasmedge", "gql-analysis.wasm"]

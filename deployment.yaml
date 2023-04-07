@@ -13,12 +13,12 @@ spec:
         app: gql-analysis
     spec:
       containers:
-        - name: gql-server-main
-          image: gql-service:latest
+        - name: router-main
+          image: router-proxy:latest
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 3000
-              hostPort: 3000
-        - name: gql-analysis-sidecar
-          image: gql-analysis:latest
+            - containerPort: 3004
+              hostPort: 3004
+        - name: gql-analyzer-sidecar
+          image: gql-analyzer:latest
           imagePullPolicy: IfNotPresent
