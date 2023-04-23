@@ -1,1 +1,2 @@
 max_depth: 5
+rate_limit_per_minute: 5

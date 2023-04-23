@@ -1,9 +1,9 @@
 @url = http://127.0.0.1
 
 ### Success Request ###
-POST {{url}}:3004
+POST {{url}}:3005
 Content-Type: application/json
-Authorization: Bearer test_token
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIiLCJzdWIiOiJtZSIsImV4cCI6MH0.41l_w0ADr1or25o-JvBMb4og4mF-nUolVtCTC7__7nI
 X-REQUEST-TYPE: GraphQL
 
 query {
@@ -41,7 +41,7 @@ query {
 ### Depth Limit Error ###
 POST {{url}}:3004
 Content-Type: application/json
-Authorization: Bearer test_token
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIiLCJzdWIiOiJtZSIsImV4cCI6MH0.41l_w0ADr1or25o-JvBMb4og4mF-nUolVtCTC7__7nI
 X-REQUEST-TYPE: GraphQL
 
 query {
