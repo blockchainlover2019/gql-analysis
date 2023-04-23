@@ -4,6 +4,7 @@ use serde_yaml;
 #[derive(Debug, serde::Deserialize, Copy, Clone)]
 pub struct Config {
   pub max_depth: u32,
+  pub rate_limit_per_minute: u32
 }
 
 impl Config {

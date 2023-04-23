@@ -1,3 +1,5 @@
+## Added `Rate Limit Check` and `Auth Check` function
+
 ## run **gql-service**
 ```sh
 cargo run

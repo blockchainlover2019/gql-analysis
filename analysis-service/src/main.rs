@@ -2,18 +2,26 @@
 
 use async_graphql::{EmptySubscription};
 
-use std::sync::Arc;
 use std::env;
 use std::net::SocketAddr;
+use std::{collections::HashMap, num::NonZeroU32, sync::Arc};
 
 use hyper::Client;
 use hyper::server::conn::Http;
 use hyper::service::{ service_fn };
+use hyper::StatusCode;
+use hyper::{Body, Method, Request, Response};
+
 use tokio::net::TcpListener;
 use tower::limit::{RateLimitLayer};
 
 use graphql_depth_limit::QueryDepthAnalyzer;
 use graphql_parser::parse_query;
+use governor::{Quota, RateLimiter};
+use hmac::{Hmac, Mac};
+use jwt::VerifyWithKey;
+use sha2::Sha256;
+use serde::{Deserialize, Serialize};
 
 mod config;
 use config::Config;
@@ -22,8 +30,15 @@ fn rate_limiter_check() -> bool {
   true
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct Claims {
+    aud: String,
+    sub: String,
+    exp: usize,
+}
+
 fn token_is_valid(_token: &str) -> bool {
-  _token == "Bearer test_token"
+  true
 }
 /*
 pub async fn post_to_gql_service(
@@ -61,6 +76,17 @@ pub fn get_query_from_bytes(bytes: &[u8]) -> String {
   query.to_string()
 }
 
+#[no_mangle]
+async fn get_query_depth(
+  bytes: &[u8],
+  max_depth: u32
+) -> usize {
+  let query = get_query_from_bytes(bytes);
+  println!("query: {:?}", query);
+  let depth = QueryDepthAnalyzer::new(&query, vec![], |_a, _b| true).unwrap();
+  depth.verify(max_depth as usize).unwrap()
+}
+
 async fn check_depth_limit(
   bytes: &[u8],
   max_depth: u32
@@ -78,35 +104,15 @@ async fn request_handler(
   req: hyper::Request<hyper::Body>,
   config: Config
 ) -> Result<hyper::Response<hyper::Body>, hyper::Error> {
-  use hyper::{Body, Method, Request, Response};
-
     match (req.method(), req.uri().path()) {
       (&Method::POST, "/") => {
-        if rate_limiter_check() {
-          let token = req.headers()
-            .get(hyper::header::AUTHORIZATION)
-            .unwrap()
-            .to_str()
-            .unwrap();
-          println!("token {:?}", token);
-          match token_is_valid(token) {
-            true => {
-              let body = req.into_body();
-              let bytes = hyper::body::to_bytes(body).await.unwrap();
-              println!("bytes {:?}", bytes);
-              if !check_depth_limit(&bytes, config.max_depth).await {
-                println!("depth limit");
-                Ok(Response::builder().status(400).body("Depth Limit Error".into()).unwrap())
-              } else {
-                Ok(Response::builder().status(200).body("Good".into()).unwrap())
-                // Ok(post_to_gql_service(bytes.into()).await)
-              }
-            }
-            _ => Ok(Response::builder().status(400).body("Authorization Error".into()).unwrap())
-          }
-          
+        let body = req.into_body();
+        let bytes = hyper::body::to_bytes(body).await.unwrap();
+        if !check_depth_limit(&bytes, config.max_depth).await {
+          Ok(Response::builder().status(StatusCode::BAD_REQUEST).body("Depth Limit Error".into()).unwrap())
         } else {
-          Ok(Response::builder().status(400).body("Rate limit Error".into()).unwrap())
+          Ok(Response::builder().status(StatusCode::OK).body("Good".into()).unwrap())
+          // Ok(post_to_gql_service(bytes.into()).await)
         }
       },    
       _ => {
@@ -114,8 +120,6 @@ async fn request_handler(
       } 
   }
 }
-
-
 
 #[tokio::main(flavor = "current_thread")]
 pub async fn main() -> anyhow::Result<()> {
@@ -127,12 +131,42 @@ pub async fn main() -> anyhow::Result<()> {
 
   let listener = TcpListener::bind(addr).await?;
   println!("Listening on http://{}", addr);
+  
+  let q = Quota::per_minute(NonZeroU32::new(sec_config.rate_limit_per_minute).unwrap());
+  let gov: Arc<RateLimiter<String, _, _>> = Arc::new(governor::RateLimiter::dashmap(q));
+  
+  loop {    
+    let gov_loop = Arc::clone(&gov);
+    let key: Arc<Hmac<Sha256>> = Arc::new(Hmac::new_from_slice(b"big secret").unwrap());
+    println!("JWT example: {}", make_jwt(key.as_ref()));
 
-  loop {
+    // POST / takes form with a token and performs rate limiting and openid verification on it.  
     let (stream, _) = listener.accept().await?;
-    let service_handler = service_fn(move |req| async move {
-      request_handler(req, sec_config).await
-    });
+    let service_handler = service_fn(move |req| {
+      let gov = Arc::clone(&gov_loop);
+      let key = Arc::clone(&key);
+      async move {
+        let token = match req.headers().get(hyper::header::AUTHORIZATION) {
+          Some(_token) => Some(_token.to_str().unwrap_or("Bearer default_token")),
+          None => None
+        };
+        if token.is_none() {
+          return Ok(Response::builder().status(StatusCode::BAD_REQUEST).body("Auth token is expected".into()).unwrap());
+        }
+        let jwt_token = token.unwrap().strip_prefix("Bearer ").unwrap();
+        let claims: Result<Claims, _> = jwt_token.verify_with_key(key.as_ref());
+        match claims {
+            Ok(claims) => match gov.clone().check_key(&claims.sub) {
+                Ok(_) => request_handler(req, sec_config).await,
+                Err(_) => Ok(Response::builder().status(StatusCode::TOO_MANY_REQUESTS).body("Rate Limit Error".into()).unwrap())
+            },
+            Err(e) => {
+                println!("bad token {:#?}", e);
+                Ok(Response::builder().status(StatusCode::FORBIDDEN).body("Authorization Error".into()).unwrap())
+            }
+        }
+      }
+  });
     
     tokio::task::spawn(async move {
         if let Err(err) = Http::new().serve_connection(stream, service_handler).await {
@@ -148,4 +182,14 @@ fn platform() -> String {
       name = format!("{}-{}", name, env::consts::OS);
   }
   name
+}
+
+fn make_jwt(key: &Hmac<Sha256>) -> String {
+  use jwt::SignWithKey;
+  let c = Claims {
+    aud: "".to_string(),
+    sub: "me".to_string(),
+    exp: 0,
+  };
+  c.sign_with_key(key).unwrap()
 }
