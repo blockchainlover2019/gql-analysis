@@ -1,8 +1,15 @@
 ## Added `Rate Limit Check` and `Auth Check` function
 
+## run **analysis-service**
+```
+cd analysis-service
+cargo build --target=wasm32-wasi --release --features=standalone
+```
+
 ## run **gql-service**
 ```sh
-cargo run
+docker build -t gql-service:latest .
+docker run -it -d -p 27017:27017 gql-service:latest
 ```
 
 ## deploy **analysis-service** as a sidecar of pod
